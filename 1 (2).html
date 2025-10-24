@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Table Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6C63FF;
+            --primary-dark: #5A52D3;
+            --secondary: #FF6584;
+            --accent: #36D1DC;
+            --success: #4CD964;
+            --warning: #FF9500;
+            --error: #FF3B30;
+            --info: #5AC8FA;
+            --dark: #1A1D29;
+            --darker: #12141C;
+            --light: #F8F9FA;
+            --card-bg: #252836;
+            --sidebar-bg: #1F212E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B2B6C5;
+            --border: #2D303D;
+            --sidebar-width: 280px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+        
+        /* Login Modal Styles */
+        .login-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+            animation: modalAppear 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        
+        @keyframes modalAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(30px);
+            }
+            
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .login-header {
+            padding: 25px 30px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        }
+        
+        .login-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        .login-body {
+            padding: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 14px 15px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .form-group input::placeholder {
+            color: rgba(178, 182, 197, 0.5);
+        }
+        
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: all 0.6s;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 7px 20px rgba(108, 99, 255, 0.4);
+        }
+        
+        .message {
+            padding: 18px 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+            border-left: 5px solid;
+        }
+        
+        .message-error {
+            background: rgba(255, 59, 48, 0.15);
+            color: var(--error);
+            border-left-color: var(--error);
+        }
+        
+        .message-success {
+            background: rgba(76, 217, 100, 0.15);
+            color: var(--success);
+            border-left-color: var(--success);
+        }
+        
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .toast {
+            padding: 18px 25px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toastIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-width: 400px;
+            border-left: 5px solid;
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        
+        @keyframes toastIn {
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .toast-success {
+            background: var(--success);
+            border-left-color: #3AC253;
+        }
+        
+        .toast-error {
+            background: var(--error);
+            border-left-color: #E0352D;
+        }
+        
+        .toast-warning {
+            background: var(--warning);
+            border-left-color: #E68500;
+        }
+        
+        .toast-info {
+            background: var(--info);
+            border-left-color: #4AB5E3;
+        }
+        
+        .toast i {
+            font-size: 20px;
+        }
+        
+        /* Main App Styles (Hidden Initially) */
+        .app-container {
+            display: none;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            padding: 25px 20px;
+            box-shadow: 5px 0 25px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            margin-bottom: 35px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .logo i {
+            font-size: 32px;
+            margin-right: 15px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .logo h1 {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .connection-form {
+            margin-bottom: 30px;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #3AC253);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 217, 100, 0.3);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning), #E68500);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 149, 0, 0.3);
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, var(--info), #4AB5E3);
+            color: white;
+            box-shadow: 0 4px 15px rgba(90, 200, 250, 0.3);
+        }
+        
+        .btn-error {
+            background: linear-gradient(135deg, var(--error), #E0352D);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 59, 48, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            margin-left: var(--sidebar-width);
+            overflow-y: auto;
+            background: var(--dark);
+            min-height: 100vh;
+        }
+        
+        .page {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 35px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .header h2 {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .back-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateX(-5px);
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .stat-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            min-width: 140px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s;
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        
+        .stat-card .label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
+        /* Tables Grid */
+        .tables-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        
+        .table-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            animation: cardAppear 0.6s ease-out;
+        }
+        
+        @keyframes cardAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+            
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .table-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(108, 99, 255, 0.1), rgba(54, 209, 220, 0.1));
+            opacity: 0;
+            transition: all 0.4s;
+        }
+        
+        .table-card:hover::before {
+            opacity: 1;
+        }
+        
+        .table-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+            border-color: var(--primary);
+        }
+        
+        .table-card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .table-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 18px;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 5px 15px rgba(108, 99, 255, 0.4);
+        }
+        
+        .table-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .table-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .sidebar {
+                width: 100%;
+                position: relative;
+                height: auto;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .app-container {
+                flex-direction: column;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 20px;
+            }
+            
+            .stats {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .stat-card {
+                min-width: calc(50% - 10px);
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .tables-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .login-card {
+                width: 95%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Login Modal (Shown First) -->
+    <div class="login-modal" id="loginModal">
+        <div class="login-card">
+            <div class="login-header">
+                <h3 class="login-title">Secure Login Required</h3>
+            </div>
+            <div class="login-body">
+                <div class="message" id="loginMessage"></div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email"><i class="fas fa-envelope"></i> Email</label>
+                        <input type="email" id="email" placeholder="admin@example.com" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password"><i class="fas fa-key"></i> Password</label>
+                        <input type="password" id="password" placeholder="Enter your password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main App (Hidden Initially) -->
+    <div class="app-container" id="appContainer">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">
+                <i class="fas fa-database"></i>
+                <h1>Table Manager Pro</h1>
+            </div>
+            
+            <div class="connection-form">
+                <div class="form-group">
+                    <label for="supabaseUrl"><i class="fas fa-link"></i> Supabase URL</label>
+                    <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co" value="https://iydamvrlxtwsnqvflaxq.supabase.co">
+                </div>
+                
+                <div class="form-group">
+                    <label for="supabaseKey"><i class="fas fa-key"></i> Supabase Key</label>
+                    <input type="text" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5ZGFtdnJseHR3c25xdmZsYXhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwOTczMTIsImV4cCI6MjA3MzY3MzMxMn0.Z8m6XGyu9wsN_UJ8EZYr12BRemsO12_U8EEZ9JizQ6w">
+                </div>
+                
+                <button class="btn btn-primary" onclick="connectDatabase()">
+                    <i class="fas fa-plug"></i> Connect Database
+                </button>
+            </div>
+            
+            <div class="message" id="connectionMessage"></div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Tables List Page -->
+            <div class="page active" id="tablesPage">
+                <div class="header">
+                    <h2>Database Tables</h2>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="number" id="tablesCount">0</div>
+                            <div class="label">Tables</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="number" id="rowsCount">0</div>
+                            <div class="label">Total Rows</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="number" id="activeTable">-</div>
+                            <div class="label">Active Table</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="message" id="mainMessage"></div>
+                
+                <div class="tables-grid" id="tablesGrid"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <script>
+        // Global variables
+        let supabaseClient = null;
+        let currentTable = null;
+        let tableData = [];
+        let allTables = [];
+        
+        // Initialize Supabase
+        const supabaseUrl = 'https://iydamvrlxtwsnqvflaxq.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5ZGFtdnJseHR3c25xdmZsYXhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwOTczMTIsImV4cCI6MjA3MzY3MzMxMn0.Z8m6XGyu9wsN_UJ8EZYr12BRemsO12_U8EEZ9JizQ6w';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        
+        // Check if user is already logged in (session storage)
+        document.addEventListener('DOMContentLoaded', function() {
+            const isLoggedIn = localStorage.getItem('isLoggedIn');
+            const sessionExpiry = localStorage.getItem('session');
+            
+            if (isLoggedIn === 'true' && sessionExpiry && Date.now() < parseInt(sessionExpiry)) {
+                // User is already logged in and session is valid
+                showApp();
+            } else {
+                // Clear any expired session data
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('session');
+                // Show login modal
+                document.getElementById('loginModal').style.display = 'flex';
+            }
+        });
+        
+        // Login form submission
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const messageEl = document.getElementById('loginMessage');
+            
+            if (!email || !password) {
+                showMessage(messageEl, 'Please enter both email and password', 'error');
+                return;
+            }
+            
+            try {
+                showMessage(messageEl, 'Verifying credentials...', 'success');
+                
+                // Query the admin table for matching credentials
+                const { data, error } = await supabase
+                    .from('admin')
+                    .select('*')
+                    .eq('email', email)
+                    .eq('password', password)
+                    .single();
+                
+                if (error) {
+                    console.error('Supabase error:', error);
+                    showMessage(messageEl, 'Invalid credentials. Please try again.', 'error');
+                    return;
+                }
+                
+                if (data) {
+                    // Login successful
+                    showMessage(messageEl, 'Login successful! Redirecting...', 'success');
+                    
+                    // Set session data
+                    const sessionTime = 50 * 60 * 1000; // 50 minutes
+                    const expiryTime = Date.now() + sessionTime;
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('session', expiryTime);
+                    
+                    // Show success toast
+                    showToast('Login successful! Welcome back.', 'success');
+                    
+                    // Show the app after a short delay
+                    setTimeout(() => {
+                        showApp();
+                    }, 1000);
+                } else {
+                    showMessage(messageEl, 'Invalid credentials. Please try again.', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage(messageEl, 'An error occurred during login.', 'error');
+            }
+        });
+        
+        // Show the main application
+        function showApp() {
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+        }
+        
+        // Connect to Supabase
+        async function connectDatabase() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+            const messageEl = document.getElementById('connectionMessage');
+            
+            if (!url || !key) {
+                showMessage(messageEl, 'Please enter both URL and Key', 'error');
+                return;
+            }
+            
+            try {
+                showMessage(messageEl, 'Connecting to database...', 'success');
+                
+                // Create Supabase client
+                supabaseClient = window.supabase.createClient(url, key);
+                
+                // Test connection by fetching tables
+                const { data, error } = await supabaseClient.rpc('get_table_names');
+                
+                if (error) {
+                    showMessage(messageEl, 'Error: ' + error.message + '. Please create the SQL function first.', 'error');
+                    return;
+                }
+                
+                showMessage(messageEl, '✅ Successfully connected to database!', 'success');
+                showToast('Database connected successfully!', 'success');
+                allTables = data;
+                loadTables(data);
+                
+            } catch (error) {
+                showMessage(messageEl, 'Error: ' + error.message, 'error');
+                showToast('Failed to connect to database', 'error');
+            }
+        }
+        
+        // Load tables into cards
+        function loadTables(tables) {
+            const grid = document.getElementById('tablesGrid');
+            grid.innerHTML = '';
+            
+            if (!tables || tables.length === 0) {
+                grid.innerHTML = '<p>No tables found in database</p>';
+                return;
+            }
+            
+            document.getElementById('tablesCount').textContent = tables.length;
+            
+            tables.forEach((table, index) => {
+                const tableName = typeof table === 'object' ?
+                    (table.table_name || table.tablename || table.name || JSON.stringify(table)) :
+                    table;
+                
+                const card = document.createElement('div');
+                card.className = 'table-card';
+                card.style.animationDelay = `${index * 0.1}s`;
+                card.innerHTML = `
+                    <div class="table-card-header">
+                        <div class="table-icon">
+                            <i class="fas fa-table"></i>
+                        </div>
+                        <div class="table-name">${tableName}</div>
+                    </div>
+                    <div class="table-stats">
+                        <span><i class="fas fa-columns"></i> Columns: ?</span>
+                        <span><i class="fas fa-list"></i> Rows: ?</span>
+                    </div>
+                `;
+                
+                card.addEventListener('click', () => showTableDetailPage(tableName));
+                grid.appendChild(card);
+            });
+        }
+        
+        // Show table detail page
+        async function showTableDetailPage(tableName) {
+            if (!supabaseClient) {
+                showToast('Please connect to database first', 'error');
+                return;
+            }
+            
+            currentTable = tableName;
+            
+            try {
+                showToast(`Loading data from ${tableName}...`, 'info');
+                
+                // Fetch table data
+                const { data, error } = await supabaseClient
+                    .from(tableName)
+                    .select('*')
+                    .limit(500);
+                
+                if (error) {
+                    showToast(`Error loading ${tableName} data: ${error.message}`, 'error');
+                    return;
+                }
+                
+                tableData = data || [];
+                
+                // Update stats
+                document.getElementById('detailRowsCount').textContent = tableData.length;
+                document.getElementById('detailColumnsCount').textContent = tableData.length > 0 ? Object.keys(tableData[0]).length : 0;
+                document.getElementById('detailFilteredCount').textContent = tableData.length;
+                
+                showToast(`Successfully loaded ${tableData.length} records`, 'success');
+                
+            } catch (error) {
+                showToast(`Error loading table data: ${error.message}`, 'error');
+            }
+        }
+        
+        // Utility functions
+        function showToast(message, type) {
+            const toastContainer = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            const icon = type === 'success' ? 'fa-check-circle' :
+                type === 'error' ? 'fa-exclamation-circle' :
+                type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+            
+            toast.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.transform = 'translateX(0)';
+                toast.style.opacity = '1';
+            }, 10);
+            
+            setTimeout(() => {
+                toast.style.transform = 'translateX(100%)';
+                toast.style.opacity = '0';
+                setTimeout(() => {
+                    toastContainer.removeChild(toast);
+                }, 500);
+            }, 5000);
+        }
+        
+        function showMessage(element, message, type) {
+            element.textContent = message;
+            element.className = `message message-${type}`;
+            element.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
